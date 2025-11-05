@@ -322,18 +322,36 @@ const busData = {
   ]
 };
 
+// Simple Map Placeholder for SSR
+const MapPlaceholder = () => (
+  <div className="h-96 w-full rounded-lg bg-gray-200 border-2 border-gray-300 flex items-center justify-center">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+      <p className="text-gray-600">Loading map...</p>
+    </div>
+  </div>
+);
+
 // Map Component with path drawing
 const MapComponent = ({ selectedRoute }: { selectedRoute: any }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const polylinesRef = useRef<any[]>([]);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    setIsClient(true);
+  }, [])
+
+  useEffect(() => {
+
+    if (!isClient || !mapRef.current) return;
+
     // Dynamically import Leaflet only on client side
     const initializeMap = async () => {
       if (typeof window === 'undefined') return;
-      
+
       // Fix for default markers
       delete (L.Icon.Default.prototype as any)._getIconUrl;
       L.Icon.Default.mergeOptions({
@@ -409,12 +427,12 @@ const MapComponent = ({ selectedRoute }: { selectedRoute: any }) => {
       // Clear existing markers and polylines
       markersRef.current.forEach(marker => map.removeLayer(marker));
       markersRef.current = [];
-      
+
       polylinesRef.current.forEach(polyline => map.removeLayer(polyline));
       polylinesRef.current = [];
 
       // Create array of coordinates for the polyline
-      const routeCoordinates = selectedRoute.bus_stops.map((stop: any) => 
+      const routeCoordinates = selectedRoute.bus_stops.map((stop: any) =>
         [stop.latitude, stop.longitude]
       );
 
@@ -437,8 +455,8 @@ const MapComponent = ({ selectedRoute }: { selectedRoute: any }) => {
 
       // Add bus stops with connecting lines
       selectedRoute.bus_stops.forEach((stop: any, index: number) => {
-        const marker = L.marker([stop.latitude, stop.longitude], { 
-          icon: createStopIcon(stop.is_next_stop) 
+        const marker = L.marker([stop.latitude, stop.longitude], {
+          icon: createStopIcon(stop.is_next_stop)
         })
           .addTo(map)
           .bindPopup(`
@@ -460,7 +478,7 @@ const MapComponent = ({ selectedRoute }: { selectedRoute: any }) => {
           opacity: 1,
           fillOpacity: 0.8
         }).addTo(map);
-        
+
         markersRef.current.push(stopCircle);
       });
 
@@ -487,7 +505,7 @@ const MapComponent = ({ selectedRoute }: { selectedRoute: any }) => {
       if (routeCoordinates.length > 1) {
         const lastCoord = routeCoordinates[routeCoordinates.length - 1];
         const secondLastCoord = routeCoordinates[routeCoordinates.length - 2];
-        
+
         const directionMarker = L.marker(lastCoord, {
           icon: L.divIcon({
             html: `<div style="transform: rotate(${getAngle(secondLastCoord, lastCoord)}deg);">➤</div>`,
@@ -495,7 +513,7 @@ const MapComponent = ({ selectedRoute }: { selectedRoute: any }) => {
             className: 'direction-arrow'
           })
         }).addTo(map);
-        
+
         markersRef.current.push(directionMarker);
       }
 
@@ -544,11 +562,14 @@ const MapComponent = ({ selectedRoute }: { selectedRoute: any }) => {
         mapInstanceRef.current = null;
       }
     };
-  }, [selectedRoute]);
+  }, [selectedRoute, isClient]);
 
+  if (!isClient) {
+    return <MapPlaceholder />;
+  }
   return (
-    <div 
-      ref={mapRef} 
+    <div
+      ref={mapRef}
       className="h-96 w-full rounded-lg bg-gray-200 border-2 border-gray-300"
     />
   );
@@ -629,7 +650,7 @@ export default function HomePage() {
           </div>
 
           <div className="bg-white rounded-lg shadow-lg border overflow-hidden">
-          
+
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
