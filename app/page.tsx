@@ -322,7 +322,7 @@ const busData = {
   ]
 };
 
-// Simple Map Placeholder for SSR
+// Map Placeholder for SSR
 const MapPlaceholder = () => (
   <div className="h-96 w-full rounded-lg bg-gray-200 border-2 border-gray-300 flex items-center justify-center">
     <div className="text-center">
@@ -332,7 +332,8 @@ const MapPlaceholder = () => (
   </div>
 );
 
-// Map Component with path drawing
+
+// Map Component - Completely client-side only
 const MapComponent = ({ selectedRoute }: { selectedRoute: any }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -342,23 +343,75 @@ const MapComponent = ({ selectedRoute }: { selectedRoute: any }) => {
 
   useEffect(() => {
     setIsClient(true);
-  }, [])
+  }, []);
 
   useEffect(() => {
-
+    // Only run on client side
     if (!isClient || !mapRef.current) return;
 
-    // Dynamically import Leaflet only on client side
-    const initializeMap = async () => {
-      if (typeof window === 'undefined') return;
+    let L: any;
 
-      // Fix for default markers
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-        iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-      });
+    const initializeMap = async () => {
+      try {
+        // Dynamically import Leaflet only on client
+        L = await import('leaflet');
+
+        // Fix for default markers
+        delete (L.Icon.Default.prototype as any)._getIconUrl;
+        L.Icon.Default.mergeOptions({
+          iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+          iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+          shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+        });
+
+        // Initialize map
+        const map = L.map(mapRef.current!).setView([3.1390, 101.6869], 11);
+
+        // Add grayscale tile layer
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+          attribution: '&copy; OpenStreetMap, &copy; CartoDB',
+          subdomains: 'abcd',
+          maxZoom: 20
+        }).addTo(map);
+
+        mapInstanceRef.current = map;
+
+        // Now setup the route
+        setupRoute(map, L);
+      } catch (error) {
+        console.error('Error loading Leaflet:', error);
+      }
+    };
+
+    const setupRoute = (map: any, L: any) => {
+      // Clear existing markers and polylines
+      markersRef.current.forEach(marker => map.removeLayer(marker));
+      markersRef.current = [];
+
+      polylinesRef.current.forEach(polyline => map.removeLayer(polyline));
+      polylinesRef.current = [];
+
+      // Create array of coordinates for the polyline
+      const routeCoordinates = selectedRoute.bus_stops.map((stop: any) =>
+        [stop.latitude, stop.longitude] as [number, number]
+      );
+
+      // Add the bus current location to the route
+      routeCoordinates.unshift([
+        selectedRoute.current_location.latitude,
+        selectedRoute.current_location.longitude
+      ] as [number, number]);
+
+      // Draw the route path
+      const routePath = L.polyline(routeCoordinates, {
+        color: '#2563EB',
+        weight: 4,
+        opacity: 0.7,
+        dashArray: '5, 10',
+        lineJoin: 'round'
+      }).addTo(map);
+
+      polylinesRef.current.push(routePath);
 
       // Custom bus icon
       const busIcon = L.divIcon({
@@ -382,7 +435,7 @@ const MapComponent = ({ selectedRoute }: { selectedRoute: any }) => {
         iconAnchor: [12, 12],
       });
 
-      // Bus stop icon - different colors for next stop vs regular stops
+      // Bus stop icon
       const createStopIcon = (isNextStop: boolean) => L.divIcon({
         html: `
           <div style="
@@ -392,68 +445,14 @@ const MapComponent = ({ selectedRoute }: { selectedRoute: any }) => {
             border-radius: 50%; 
             border: 3px solid white;
             box-shadow: 0 2px 4px rgba(0,0,0,0.5);
-            ${isNextStop ? 'animation: pulse 1.5s infinite;' : ''}
           "></div>
-          <style>
-            @keyframes pulse {
-              0% { transform: scale(1); }
-              50% { transform: scale(1.2); }
-              100% { transform: scale(1); }
-            }
-          </style>
         `,
         className: 'stop-marker',
         iconSize: isNextStop ? [16, 16] : [12, 12],
         iconAnchor: isNextStop ? [8, 8] : [6, 6],
       });
 
-      if (mapRef.current && !mapInstanceRef.current) {
-        // Initialize map with Kuala Lumpur coordinates
-        const map = L.map(mapRef.current).setView([3.1390, 101.6869], 11);
-
-        // Add grayscale tile layer - using CartoDB Positron for light grayscale
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-          attribution: '&copy; OpenStreetMap, &copy; CartoDB',
-          subdomains: 'abcd',
-          maxZoom: 20
-        }).addTo(map);
-
-        mapInstanceRef.current = map;
-      }
-
-      const map = mapInstanceRef.current;
-      if (!map) return;
-
-      // Clear existing markers and polylines
-      markersRef.current.forEach(marker => map.removeLayer(marker));
-      markersRef.current = [];
-
-      polylinesRef.current.forEach(polyline => map.removeLayer(polyline));
-      polylinesRef.current = [];
-
-      // Create array of coordinates for the polyline
-      const routeCoordinates = selectedRoute.bus_stops.map((stop: any) =>
-        [stop.latitude, stop.longitude]
-      );
-
-      // Add the bus current location to the route for better visualization
-      routeCoordinates.unshift([
-        selectedRoute.current_location.latitude,
-        selectedRoute.current_location.longitude
-      ]);
-
-      // Draw the route path
-      const routePath = L.polyline(routeCoordinates, {
-        color: '#2563EB',
-        weight: 4,
-        opacity: 0.7,
-        dashArray: '5, 10',
-        lineJoin: 'round'
-      }).addTo(map);
-
-      polylinesRef.current.push(routePath);
-
-      // Add bus stops with connecting lines
+      // Add bus stops
       selectedRoute.bus_stops.forEach((stop: any, index: number) => {
         const marker = L.marker([stop.latitude, stop.longitude], {
           icon: createStopIcon(stop.is_next_stop)
@@ -469,7 +468,7 @@ const MapComponent = ({ selectedRoute }: { selectedRoute: any }) => {
           `);
         markersRef.current.push(marker);
 
-        // Add a small circle at each stop for better visibility
+        // Add circle markers
         const stopCircle = L.circleMarker([stop.latitude, stop.longitude], {
           radius: 8,
           fillColor: stop.is_next_stop ? '#F59E0B' : '#DC2626',
@@ -478,7 +477,6 @@ const MapComponent = ({ selectedRoute }: { selectedRoute: any }) => {
           opacity: 1,
           fillOpacity: 0.8
         }).addTo(map);
-
         markersRef.current.push(stopCircle);
       });
 
@@ -501,23 +499,7 @@ const MapComponent = ({ selectedRoute }: { selectedRoute: any }) => {
         `);
       markersRef.current.push(busMarker);
 
-      // Add direction arrow to show bus direction
-      if (routeCoordinates.length > 1) {
-        const lastCoord = routeCoordinates[routeCoordinates.length - 1];
-        const secondLastCoord = routeCoordinates[routeCoordinates.length - 2];
-
-        const directionMarker = L.marker(lastCoord, {
-          icon: L.divIcon({
-            html: `<div style="transform: rotate(${getAngle(secondLastCoord, lastCoord)}deg);">➤</div>`,
-            iconSize: [20, 20],
-            className: 'direction-arrow'
-          })
-        }).addTo(map);
-
-        markersRef.current.push(directionMarker);
-      }
-
-      // Add custom map labels (simulating the screenshot labels)
+      // Add area labels
       const areas = [
         { name: "Kuang", lat: 3.25, lng: 101.55 },
         { name: "Kapar", lat: 3.15, lng: 101.45 },
@@ -540,22 +522,15 @@ const MapComponent = ({ selectedRoute }: { selectedRoute: any }) => {
         markersRef.current.push(label);
       });
 
-      // Fit map to show the entire route with padding
+      // Fit map to show the route
       if (routePath.getBounds().isValid()) {
         map.fitBounds(routePath.getBounds().pad(0.2));
-      }
-
-      // Helper function to calculate arrow angle
-      function getAngle(coord1: any, coord2: any) {
-        const dx = coord2[1] - coord1[1];
-        const dy = coord2[0] - coord1[0];
-        return Math.atan2(dy, dx) * 180 / Math.PI;
       }
     };
 
     initializeMap();
 
-    // Cleanup function
+    // Cleanup
     return () => {
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
@@ -567,6 +542,7 @@ const MapComponent = ({ selectedRoute }: { selectedRoute: any }) => {
   if (!isClient) {
     return <MapPlaceholder />;
   }
+
   return (
     <div
       ref={mapRef}
@@ -577,7 +553,7 @@ const MapComponent = ({ selectedRoute }: { selectedRoute: any }) => {
 
 export default function HomePage() {
   const [selectedRoute, setSelectedRoute] = useState(busData.bus_lines[0]);
-  const [activeBuses, setActiveBuses] = useState(busData.bus_lines.filter(bus => bus.status === 'Active'));
+  const [activeBuses] = useState(busData.bus_lines.filter(bus => bus.status === 'Active'));
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -625,8 +601,35 @@ export default function HomePage() {
         </div>
 
         {/* Active Bus Map Section */}
-        <div className="mb-8 bg-white rounded-lg shadow-lg border p-6">
+        {/* <div className="mb-8 bg-white rounded-lg shadow-lg border p-6">
           <MapComponent selectedRoute={selectedRoute} />
+        </div> */}
+
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Active Bus Map</h2>
+          <div className="bg-white rounded-lg shadow-lg border-2 border-gray-300 p-1">
+            <MapComponent selectedRoute={selectedRoute} />
+            <div className="p-4 bg-gray-50 border-t">
+              <div className="flex items-center justify-center space-x-6 text-sm">
+                <div className="flex items-center space-x-2">
+                  <div className="w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow"></div>
+                  <span>Bus Location</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 bg-red-500 rounded-full border-2 border-white shadow"></div>
+                  <span>Bus Stops</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 bg-orange-500 rounded-full border-2 border-white shadow"></div>
+                  <span>Next Stop</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-4 h-1 bg-blue-500 opacity-70 border border-blue-300"></div>
+                  <span>Route Path</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
 
