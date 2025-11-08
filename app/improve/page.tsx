@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import 'leaflet/dist/leaflet.css';
+import Link from 'next/link';
 
 // Mock API data
 const busData = {
@@ -641,9 +642,14 @@ export default function HomePage() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
 
       {/* Header */}
-      <header className="bg-gray-800 text-white p-2 flex justify-between items-center text-sm">
-        <span className="opacity-70">Amana Logo</span>
-        <span className="opacity-70">Menu</span>
+      <header className="sticky top-0 bg-white shadow-sm z-50">
+        <div className="flex items-center justify-between p-4">
+          <Link href="/" className="flex items-center space-x-2 text-blue-600">
+            <span>Back</span>
+          </Link>
+          <div className="text-xl font-semibold">Amana Logo</div>
+          <div className="w-10"> Menu </div>
+        </div>
       </header>
 
       <div className="bg-gradient-to-r from-blue-600 to-purple-700 shadow-xl">
@@ -862,7 +868,7 @@ export default function HomePage() {
           </div>
           <div className="border-t border-blue-800 mt-8 pt-8 text-center">
             <p className="text-blue-300">
-              &copy; 2024 Amana Transportation. Proudly serving Malaysia since 2019. All rights reserved.
+              &copy; 2025 Amana Transportation. Proudly serving Malaysia since 2019. All rights reserved.
             </p>
           </div>
         </div>
